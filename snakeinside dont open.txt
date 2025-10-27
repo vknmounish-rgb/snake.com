@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Realistic Snake Game - Head and Tail</title>
+<style>
+html,body {height:100%;margin:0;display:flex;align-items:center;justify-content:center;background:#1a1a1a;color:#fff;font-family:'Segoe UI',sans-serif;overflow:hidden;}
+canvas {background:linear-gradient(180deg,#4caf50,#2e7d32);border-radius:15px;box-shadow:0 0 20px rgba(0,0,0,0.7);}
+#hud {position:absolute;top:20px;left:50%;transform:translateX(-50%);font-size:24px;color:#fff;text-shadow:0 0 5px #000;}
+button {margin:6px;padding:8px 14px;background:#43a047;color:#fff;border:none;border-radius:8px;cursor:pointer;transition:0.2s;}
+button:hover {background:#388e3c;}
+</style>
+</head>
+<body>
+<div id="hud">Score: <span id="score">0</span> | Level: <span id="level">1</span> | <button id="start">Start</button> <button id="pause">Pause</button> <button id="restart">Restart</button></div>
+<canvas id="game" width="800" height="800"></canvas>
+<audio id="eatSound" src="https://actions.google.com/sounds/v1/cartoon/pop.ogg"></audio>
+<audio id="gameOverSound" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const levelEl = document.getElementById('level');
+const eatSound = document.getElementById('eatSound');
+const gameOverSound = document.getElementById('gameOverSound');
+
+let tileSize = 40;
+let tileCountX = canvas.width / tileSize;
+let tileCountY = canvas.height / tileSize;
+let snake = [{x:5,y:5}];
+let apples = [{x:10,y:10,xp:1}];
+let dx = 1, dy = 0;
+let score = 0;
+let level = 1;
+let speed = 300;
+let running = false;
+let paused = false;
+let moveTimer = 0;
+const MAX_LEVEL = 1e33;
+
+const snakeHeadImg = new Image();
+snakeHeadImg.src = 'https://twemoji.maxcdn.com/v/latest/72x72/1f40d.png';
+const snakeTailImg = new Image();
+snakeTailImg.src = 'https://twemoji.maxcdn.com/v/latest/72x72/1f40d.png';
+const snakeBodyImg = new Image();
+snakeBodyImg.src = 'https://twemoji.maxcdn.com/v/latest/72x72/1f40d.png';
+const appleImg = new Image();
+appleImg.src = 'https://twemoji.maxcdn.com/v/latest/72x72/1f34e.png';
+
+function randomPosX(){return Math.floor(Math.random()*tileCountX);}
+function randomPosY(){return Math.floor(Math.random()*tileCountY);}
+function randomXP(){const vals=[1,2,10]; return vals[Math.floor(Math.random()*vals.length)];}
+
+function drawSnake(){
+  for(let i=0;i<snake.length;i++){
+    const seg = snake[i];
+    if(i===0) ctx.drawImage(snakeHeadImg, seg.x*tileSize, seg.y*tileSize, tileSize, tileSize);
+    else if(i===snake.length-1) ctx.drawImage(snakeTailImg, seg.x*tileSize, seg.y*tileSize, tileSize, tileSize);
+    else ctx.drawImage(snakeBodyImg, seg.x*tileSize, seg.y*tileSize, tileSize, tileSize);
+  }
+}
+
+function drawApples(){
+  apples.forEach(apple => ctx.drawImage(appleImg, apple.x*tileSize, apple.y*tileSize, tileSize, tileSize));
+}
+
+function moveSnake(){
+  const head={x:snake[0].x+dx,y:snake[0].y+dy};
+  if(head.x<0) head.x=tileCountX-1;
+  if(head.x>=tileCountX) head.x=0;
+  if(head.y<0) head.y=tileCountY-1;
+  if(head.y>=tileCountY) head.y=0;
+  if(snake.some(s=>s.x===head.x&&s.y===head.y)){running=false;gameOverSound.play();alert('Game Over! Score: '+score+' | Level: '+level);return;}
+  snake.unshift(head);
+
+  let grew=false;
+  apples.forEach((apple,index) => {
+    if(head.x===apple.x && head.y===apple.y){
+      score += apple.xp; eatSound.play(); scoreEl.textContent=score;
+      // move apple to new random location
+      apples[index]={x:randomPosX(),y:randomPosY(),xp:1};
+      // snake grows by xp value
+      for(let i=0;i<apple.xp;i++) snake.push({...snake[snake.length-1]});
+      grew=true;
+      if(score % 5 === 0 && level < MAX_LEVEL){level++; levelEl.textContent=level; speed=Math.max(50,speed-20);}
+    }
+  });
+
+  if(!grew) snake.pop();
+}
+
+function smoothMove(timestamp){
+  if(!moveTimer) moveTimer=timestamp;
+  const elapsed=timestamp-moveTimer;
+  if(elapsed>speed){if(!paused&&running) moveSnake(); moveTimer=timestamp;}
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  drawApples(); drawSnake();
+  requestAnimationFrame(smoothMove);
+}
+
+window.addEventListener('keydown',e=>{
+  if(e.key==='ArrowUp'&&dy!==1){dx=0;dy=-1;running=true;}
+  if(e.key==='ArrowDown'&&dy!==-1){dx=0;dy=1;running=true;}
+  if(e.key==='ArrowLeft'&&dx!==1){dx=-1;dy=0;running=true;}
+  if(e.key==='ArrowRight'&&dx!==-1){dx=1;dy=0;running=true;}
+});
+
+document.getElementById('start').onclick=()=>{if(!running){running=true;requestAnimationFrame(smoothMove);}};
+document.getElementById('pause').onclick=()=>{paused=!paused;};
+document.getElementById('restart').onclick=()=>{
+  snake=[{x:5,y:5}];dx=1;dy=0;score=0;level=1;scoreEl.textContent=0;levelEl.textContent=1;
+  apples=[{x:10,y:10,xp:1}]; speed=300; running=true; paused=false; moveTimer=0;
+  requestAnimationFrame(smoothMove);
+};
+</script>
+</body>
+</html>
